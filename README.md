@@ -1,6 +1,6 @@
-# POC - BFF Proxy para Astro-Dashboard
+# POC - BFF Proxy for Astro-Dashboard
 
-Servidor mínimo para validar que o `<astro-dashboard>` envia requests pelo atributo `bff`.
+Minimal server to validate that `<astro-dashboard>` sends requests through the `bff` attribute.
 
 ## Setup
 
@@ -9,73 +9,81 @@ cd poc-bff
 npm install
 ```
 
-## Uso
+## Usage
 
-### 1. Configurar
+### 1. Configure
 
-Edite as variáveis no topo do `server.js`, ou passe via ambiente:
+Edit the variables at the top of `server.js`, or pass them via environment:
 
 ```bash
-export ASTROBOX_API_URL="https://api.astrobox.hotmart.com"  # URL real da API
-export HOTMART_TOKEN="eyJhbG..."                             # Token obtido manualmente
+export ASTROBOX_API_URL="https://api.astrobox.hotmart.com"  # Real API URL
+export HOTMART_TOKEN="eyJhbG..."                             # Token obtained manually
+export MOCK_MODE="true"                                      # Optional: use mock responses
 ```
 
-### 2. Rodar
+### 2. Run
 
 ```bash
 npm start
 ```
 
-O servidor sobe em `http://localhost:3099`.
+The server starts at `http://localhost:3099`.
 
-### 3. Testar no microfrontend
+### 3. Test in the microfrontend
 
 ```html
 <astro-dashboard
   bff="http://localhost:3099"
-  dashboard-id="SEU_DASHBOARD_ID"
+  dashboard-id="YOUR_DASHBOARD_ID"
   language="pt-BR"
   user-id="test-user"
 />
 ```
 
-**Não passe `token`** — o proxy injeta automaticamente.
+**Do not pass `token`** — the proxy injects it automatically.
 
-### 4. Observar
+### 4. Observe
 
-No terminal do servidor, você vai ver logs de cada request:
+In the server terminal, you will see logs for each request:
 
 ```
 ============================================================
 📥 GET /v1/resource/dashboard/abc123
-   Headers relevantes:
-     Authorization: (nenhum)
+   Relevant headers:
+     Authorization: (none)
      X-Client-Name: astro-dashboard
-   Body: (vazio)
+   Body: (empty)
 ============================================================
 
-🔀 Repassando para: https://api.astrobox.hotmart.com/v1/resource/dashboard/abc123
-✅ Resposta do Astrobox: 200 OK
+🔀 Forwarding to: https://api.astrobox.hotmart.com/v1/resource/dashboard/abc123
+✅ Astrobox response: 200 OK
 ```
 
-## O que validar
+## Operation Modes
 
-- [ ] As requests do microfrontend estão chegando no proxy (aparecem no log)
-- [ ] O path está correto (`/v1/resource/dashboard/{id}`, `/v1/executor/...`)
-- [ ] A resposta do Astrobox chega e o dashboard renderiza
-- [ ] Sem `token` no frontend, o dashboard ainda funciona (proxy injeta)
+| Mode | Description |
+|------|-------------|
+| **MOCK** (`MOCK_MODE=true`) | Returns saved JSON/NDJSON responses from `./mocks/` — no token or API needed |
+| **PROXY** (`MOCK_MODE=false`) | Forwards requests to the real Astrobox API — requires a valid token |
 
-## Endpoints esperados
+## What to validate
 
-| Método | Path | Quando |
-|--------|------|--------|
-| GET | `/v1/resource/dashboard/{id}` | Ao carregar o dashboard |
-| POST | `/v1/executor/reactive/by-id` | Ao executar queries (visualizações) |
-| POST | `/v1/executor/reactive/component` | Ao executar componentes salvos |
+- [ ] Microfrontend requests are reaching the proxy (visible in logs)
+- [ ] The path is correct (`/v1/resource/dashboard/{id}`, `/v1/executor/...`)
+- [ ] The Astrobox response arrives and the dashboard renders
+- [ ] Without `token` in the frontend, the dashboard still works (proxy injects it)
 
-## Próximos passos (pós-POC)
+## Expected endpoints
 
-1. Adicionar autenticação do usuário Teachable (middleware de sessão)
-2. Injetar `school_id` no body baseado no usuário logado
-3. Mover token pro Secrets Manager
-4. Deployar como serviço real
+| Method | Path | When |
+|--------|------|------|
+| GET | `/v1/resource/dashboard/{id}` | When loading the dashboard |
+| POST | `/v1/executor/reactive/by-id` | When executing queries (visualizations) |
+| POST | `/v1/executor/reactive/component` | When executing saved components |
+
+## Next steps (post-POC)
+
+1. Add Teachable user authentication (session middleware)
+2. Inject `school_id` in the body based on the logged-in user
+3. Move token to Secrets Manager
+4. Deploy as a real service

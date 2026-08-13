@@ -1,17 +1,3 @@
-/**
- * POC - BFF Proxy para testar se o astro-dashboard envia requests via atributo `bff`
- *
- * Modos de operação:
- *   MOCK_MODE=true  → Retorna respostas salvas em ./mocks/ (sem precisar de token/API)
- *   MOCK_MODE=false → Proxy real para a API do Astrobox (precisa de token válido)
- *
- * Como usar:
- * 1. npm install
- * 2. Configure .env com ASTROBOX_API_URL, HOTMART_TOKEN, e opcionalmente MOCK_MODE=true
- * 3. npm start
- * 4. No frontend, use: <astro-dashboard bff="http://localhost:3099" ... />
- */
-
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -32,26 +18,26 @@ const DASHBOARD_ID = 'e1452c16-84fe-4c53-92b7-8f8f19794292';
 const MOCK_MODE = process.env.MOCK_MODE === 'true';
 
 // ============================================================
-// MOCK RESPONSES — mapeia path → arquivo de mock
+// MOCK RESPONSES — maps path → mock file
 // ============================================================
 const MOCK_MAP = {
   'GET:/v1/resource/dashboard/:id': 'mocks/dashboard.json',
   'GET:/v1/features/list': 'mocks/features-list.json',
   'POST:/v1/executor/reactive/component': 'mocks/executor-component.ndjson',
-  // Adicione mais mocks conforme necessário:
+  // Add more mocks as needed:
   // 'POST:/v1/executor/reactive/by-id': 'mocks/executor-by-id.ndjson',
 };
 
 /**
- * Tenta encontrar um mock para o request
- * Suporta patterns com :param (ex: /v1/resource/dashboard/:id)
+ * Tries to find a mock for the request
+ * Supports patterns with :param (e.g.: /v1/resource/dashboard/:id)
  */
 function findMock(method, path) {
-  // Tenta match exato primeiro
+  // Try exact match first
   const exactKey = `${method}:${path}`;
   if (MOCK_MAP[exactKey]) return MOCK_MAP[exactKey];
 
-  // Tenta match com pattern
+  // Try pattern match
   for (const [pattern, file] of Object.entries(MOCK_MAP)) {
     const colonIndex = pattern.indexOf(':');
     const patternMethod = pattern.substring(0, colonIndex);
@@ -79,19 +65,19 @@ function findMock(method, path) {
 const app = express();
 
 // Middlewares
-app.use(cors()); // aceita requests de qualquer origem (POC)
+app.use(cors()); // accept requests from any origin (POC)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.text({ type: 'application/x-ndjson' }));
 
-// Logger — mostra tudo que chega
+// Logger — shows everything that arrives
 app.use((req, res, next) => {
   console.log('\n' + '='.repeat(60));
   console.log(`📥 ${req.method} ${req.path}`);
   console.log(`   Query: ${JSON.stringify(req.query)}`);
-  console.log(`   Headers relevantes:`);
-  console.log(`     Content-Type: ${req.headers['content-type'] || '(nenhum)'}`);
-  console.log(`     Authorization: ${req.headers['authorization'] ? '***presente***' : '(nenhum)'}`);
-  console.log(`     X-Client-Name: ${req.headers['x-client-name'] || '(nenhum)'}`);
+  console.log(`   Relevant headers:`);
+  console.log(`     Content-Type: ${req.headers['content-type'] || '(none)'}`);
+  console.log(`     Authorization: ${req.headers['authorization'] ? '***present***' : '(none)'}`);
+  console.log(`     X-Client-Name: ${req.headers['x-client-name'] || '(none)'}`);
   if (req.body && Object.keys(req.body).length > 0) {
     console.log(`   Body: ${JSON.stringify(req.body, null, 2)}`);
   }
@@ -111,7 +97,7 @@ app.all('/*', async (req, res) => {
       const filePath = join(__dirname, mockFile);
 
       if (existsSync(filePath)) {
-        console.log(`🎭 MOCK MODE — Retornando: ${mockFile}`);
+        console.log(`🎭 MOCK MODE — Returning: ${mockFile}`);
         const data = readFileSync(filePath, 'utf-8');
         const contentType = mockFile.endsWith('.ndjson')
           ? 'application/x-ndjson'
@@ -120,14 +106,14 @@ app.all('/*', async (req, res) => {
         res.status(200).send(data);
         return;
       } else {
-        console.log(`⚠️  MOCK MODE — Arquivo não encontrado: ${filePath}`);
+        console.log(`⚠️  MOCK MODE — File not found: ${filePath}`);
         res.status(404).json({ error: `Mock file not found: ${mockFile}` });
         return;
       }
     }
 
-    // Sem mock definido pra essa rota — retorna 501
-    console.log(`⚠️  MOCK MODE — Nenhum mock definido para: ${req.method} ${req.path}`);
+    // No mock defined for this route — return 501
+    console.log(`⚠️  MOCK MODE — No mock defined for: ${req.method} ${req.path}`);
     res.status(501).json({
       error: 'No mock defined for this route',
       method: req.method,
@@ -142,7 +128,7 @@ app.all('/*', async (req, res) => {
   const queryString = new URLSearchParams(req.query).toString();
   const fullUrl = queryString ? `${targetUrl}?${queryString}` : targetUrl;
 
-  console.log(`\n🔀 Repassando para: ${fullUrl}`);
+  console.log(`\n🔀 Forwarding to: ${fullUrl}`);
 
   try {
     const headers = {
@@ -162,28 +148,40 @@ app.all('/*', async (req, res) => {
       headers,
     };
 
-    // Só inclui body em POST/PUT/PATCH
+    // Only include body for POST/PUT/PATCH
     if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {
-      fetchOptions.body = JSON.stringify(req.body);
+      // If body is already a string (e.g.: ndjson parsed by express.text), send as is
+      if (typeof req.body === 'string') {
+        fetchOptions.body = req.body;
+      } else {
+        fetchOptions.body = JSON.stringify(req.body);
+      }
+      console.log(`   📤 Body sent (preview): ${fetchOptions.body.substring(0, 300)}${fetchOptions.body.length > 300 ? '...' : ''}`);
     }
 
     const response = await fetch(fullUrl, fetchOptions);
 
-    console.log(`✅ Resposta do Astrobox: ${response.status} ${response.statusText}`);
+    console.log(`${response.status < 400 ? '✅' : '❌'} Astrobox response: ${response.status} ${response.statusText}`);
 
-    // Forward content-type da resposta
+    // Forward response content-type
     const contentType = response.headers.get('content-type') || 'application/json';
     res.setHeader('Content-Type', contentType);
     res.status(response.status);
 
-    // Lê e loga preview da resposta
+    // Read and log response preview
     const data = await response.text();
-    console.log(`   Resposta (preview): ${data.substring(0, 200)}${data.length > 200 ? '...' : ''}`);
+    if (response.status >= 400) {
+      // Show full response on error
+      console.log(`   ⚠️  Full error response:`);
+      console.log(`   ${data}`);
+    } else {
+      console.log(`   Response (preview): ${data.substring(0, 200)}${data.length > 200 ? '...' : ''}`);
+    }
     res.send(data);
   } catch (error) {
-    console.error(`❌ Erro ao repassar: ${error.message}`);
+    console.error(`❌ Error forwarding: ${error.message}`);
     res.status(502).json({
-      error: 'Falha ao comunicar com Astrobox',
+      error: 'Failed to communicate with Astrobox',
       details: error.message,
     });
   }
@@ -196,18 +194,18 @@ app.listen(PORT, () => {
   const mode = MOCK_MODE ? '🎭 MOCK' : '🔀 PROXY';
   console.log(`
 ╔══════════════════════════════════════════════════════════╗
-║  POC BFF ${mode} rodando em http://localhost:${PORT}    ║
+║  POC BFF ${mode} running at http://localhost:${PORT}    ║
 ╠══════════════════════════════════════════════════════════╣
 ║                                                          ║
-║  Modo: ${MOCK_MODE ? 'MOCK (retorna JSONs de ./mocks/)'.padEnd(48) : 'PROXY (repassa para API)'.padEnd(48)}║
+║  Mode: ${MOCK_MODE ? 'MOCK (returns JSONs from ./mocks/)'.padEnd(48) : 'PROXY (forwards to API)'.padEnd(48)}║
 ║  Astrobox API: ${ASTROBOX_API_URL.padEnd(40)}║
 ║  Dashboard:   ${DASHBOARD_ID.padEnd(40)}║${MOCK_MODE ? '' : `
-║  Token: ${HOTMART_TOKEN === 'YOUR_TOKEN_HERE' ? '⚠️  NÃO CONFIGURADO'.padEnd(47) : '✅ Configurado'.padEnd(47)}║`}
+║  Token: ${HOTMART_TOKEN === 'YOUR_TOKEN_HERE' ? '⚠️  NOT CONFIGURED'.padEnd(47) : '✅ Configured'.padEnd(47)}║`}
 ║                                                          ║
-║  Use no microfrontend:                                   ║
+║  Usage at frontend:                                      ║
 ║  <astro-dashboard                                        ║
-║    bff="http://localhost:${PORT}"                          ║
-║    dashboard-id="${DASHBOARD_ID}"   ║
+║    bff="http://localhost:${PORT}"                        ║
+║    dashboard-id="${DASHBOARD_ID}"                        ║
 ║    language="pt-BR"                                      ║
 ║    user-id="test-user"                                   ║
 ║  />                                                      ║
